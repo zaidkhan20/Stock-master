@@ -1,0 +1,83 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile and role management",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["ADMIN", "STAFF", "VIEWER"] },
+        "name": { "type": "string" },
+        "photoURL": { "type": "string", "format": "uri" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "email", "role"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Inventory product item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "sku": { "type": "string" },
+        "categoryId": { "type": "string" },
+        "quantity": { "type": "number" },
+        "minStock": { "type": "number" },
+        "price": { "type": "number" },
+        "unit": { "type": "string" },
+        "description": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "updatedBy": { "type": "string" }
+      },
+      "required": ["name", "sku", "quantity"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Stock movement record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "productId": { "type": "string" },
+        "type": { "type": "string", "enum": ["IN", "OUT", "ADJUST"] },
+        "quantity": { "type": "number" },
+        "previousStock": { "type": "number" },
+        "currentStock": { "type": "number" },
+        "userId": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "note": { "type": "string" }
+      },
+      "required": ["productId", "type", "quantity", "userId", "timestamp"]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "Product categorization",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" }
+      },
+      "required": ["name"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Inventory items"
+    },
+    "/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Audit log of stock changes"
+    },
+    "/categories/{categoryId}": {
+      "schema": "Category",
+      "description": "Product categories"
+    }
+  }
+}

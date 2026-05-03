@@ -1,0 +1,6 @@
+{
+  "name": "StockMaster Pro",
+  "description": "A robust stock management system with multi-user roles, real-time inventory tracking, and transaction logging.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
