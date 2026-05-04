@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { useCollection } from '../hooks/useCollection';
 import { UserProfile, UserRole } from '../types';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, updateDoc, doc, deleteDoc } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import { cn } from '../lib/utils';
