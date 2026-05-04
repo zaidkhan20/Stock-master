@@ -10,7 +10,8 @@ import {
   ArrowUpDown, 
   Download,
   Package,
-  History
+  History,
+  X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -30,7 +31,7 @@ export const Inventory: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
-  const { userRole } = useAuth();
+  const { profile } = useAuth();
 
   // New Product Form State
   const [newProduct, setNewProduct] = useState({
@@ -190,7 +191,7 @@ export const Inventory: React.FC = () => {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden"
+              className="bg-white w-full max-w-xl rounded-2xl shadow-2xl overflow-y-auto max-h-[90vh]"
             >
               <div className="p-6 border-b border-slate-100 flex items-center justify-between">
                 <h2 className="text-xl font-bold text-slate-900">Add New Product</h2>

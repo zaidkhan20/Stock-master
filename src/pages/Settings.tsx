@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { collection, query, onSnapshot, doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { collection, query, onSnapshot, doc, setDoc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { db, auth } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
+import { cn } from '../lib/utils';
 import { 
   Settings as SettingsIcon, 
   UserCog, 
@@ -10,12 +11,14 @@ import {
   ShieldCheck,
   Save,
   Palette,
-  Briefcase
+  Briefcase,
+  Trash2,
+  AlertTriangle
 } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export const Settings: React.FC = () => {
-  const { user, userRole } = useAuth();
+  const { user, profile, isAdmin } = useAuth();
   const [activeTab, setActiveTab] = useState<'GENERAL' | 'ROLES'>('GENERAL');
   
   const [config, setConfig] = useState({
@@ -34,12 +37,12 @@ export const Settings: React.FC = () => {
       }
     });
 
-    if (userRole?.role === 'ADMIN') {
+    if (isAdmin) {
       onSnapshot(collection(db, 'users'), (snapshot) => {
         setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       });
     }
-  }, [userRole]);
+  }, [isAdmin]);
 
   const handleSaveGeneral = async () => {
     try {
@@ -72,7 +75,7 @@ export const Settings: React.FC = () => {
         >
           General
         </button>
-        {userRole?.role === 'ADMIN' && (
+        {isAdmin && (
           <button 
             onClick={() => setActiveTab('ROLES')}
             className={cn("px-6 py-2.5 rounded-lg text-sm font-black uppercase transition-all", activeTab === 'ROLES' ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700")}
@@ -153,7 +156,7 @@ export const Settings: React.FC = () => {
                     <h2 className="text-xl font-bold">Admin Privileges</h2>
                  </div>
                  <p className="text-slate-400 text-sm leading-relaxed mb-6">
-                   Your account has <span className="text-emerald-400 font-bold">{userRole?.role}</span> status. 
+                   Your account has <span className="text-emerald-400 font-bold">{profile?.role}</span> status. 
                    You can manage inventory, process wholesale sales, and view staff performance.
                  </p>
                  <div className="space-y-3">

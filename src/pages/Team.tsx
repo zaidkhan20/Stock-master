@@ -22,7 +22,7 @@ import { useCollection } from '../hooks/useCollection';
 import { UserProfile, UserRole } from '../types';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, updateDoc, doc, deleteDoc } from 'firebase/firestore';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 import { cn } from '../lib/utils';
 
 export const Team: React.FC = () => {
@@ -157,6 +157,35 @@ export const Team: React.FC = () => {
                 </td>
                 <td className="p-4 text-right">
                   <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {isAdmin && (
+                      <button 
+                        onClick={async () => {
+                          const isSelf = user.id === profile?.id;
+                          const msg = isSelf 
+                            ? `WARNING: PURGING YOUR OWN IDENTITY (${user.email}). YOU WILL BE INSTANTLY LOGGED OUT AND YOUR RECORD REMOVED. PROCEED?`
+                            : `PERMANENTLY REMOVE NODE: ${user.email}? THIS ACTION IS IRREVERSIBLE.`;
+                          
+                          if (window.confirm(msg)) {
+                            try {
+                              await deleteDoc(doc(db, 'users', user.id));
+                              if (isSelf) {
+                                alert("IDENTITY PURGED. TERMINATING SESSION.");
+                                await auth.signOut();
+                              }
+                            } catch (err) {
+                              handleFirestoreError(err, OperationType.DELETE, `users/${user.id}`);
+                            }
+                          }
+                        }}
+                        className={cn(
+                          "p-2 transition-all rounded",
+                          user.id === profile?.id ? "text-rose-600 hover:bg-rose-100" : "text-zinc-400 hover:text-red-600 hover:bg-red-50"
+                        )}
+                        title={user.id === profile?.id ? "Self-Purge Identity" : "Decommission Node"}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
                     <button className="p-2 text-zinc-400 hover:text-slate-950 hover:bg-zinc-200 transition-all rounded">
                       <MoreVertical size={16} />
                     </button>

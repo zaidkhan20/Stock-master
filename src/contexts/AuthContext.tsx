@@ -1,56 +1,74 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { auth, db } from '../lib/firebase';
-
-interface UserRole {
-  role: 'ADMIN' | 'MANAGER' | 'STAFF';
-  name: string;
-}
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { UserProfile, UserRole } from '../types';
 
 interface AuthContextType {
   user: FirebaseUser | null;
-  userRole: UserRole | null;
+  profile: UserProfile | null;
   loading: boolean;
+  isAdmin: boolean;
+  isStaff: boolean;
 }
 
-const AuthContext = createContext<AuthContextType>({ user: null, userRole: null, loading: true });
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  profile: null,
+  loading: true,
+  isAdmin: false,
+  isStaff: false,
+});
 
 export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<FirebaseUser | null>(null);
-  const [userRole, setUserRole] = useState<UserRole | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    return onAuthStateChanged(auth, async (authenticatedUser) => {
-      setUser(authenticatedUser);
-      if (authenticatedUser) {
-        const userDoc = await getDoc(doc(db, 'users', authenticatedUser.uid));
-        if (userDoc.exists()) {
-          setUserRole(userDoc.data() as UserRole);
-        } else {
-          // New user default role
-          const defaultRole: UserRole = { role: 'STAFF', name: authenticatedUser.displayName || 'Generic User' };
-          await setDoc(doc(db, 'users', authenticatedUser.uid), {
-            id: authenticatedUser.uid,
-            email: authenticatedUser.email,
-            ...defaultRole,
-            createdAt: new Date().toISOString()
-          });
-          setUserRole(defaultRole);
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      setUser(firebaseUser);
+      
+      if (firebaseUser && db) {
+        try {
+          const userDocRef = doc(db, 'users', firebaseUser.uid);
+          let userDoc = await getDoc(userDocRef);
+
+          if (!userDoc.exists()) {
+            const newProfile: UserProfile = {
+              id: firebaseUser.uid,
+              email: firebaseUser.email || '',
+              name: firebaseUser.displayName || 'Unnamed Node',
+              photoURL: firebaseUser.photoURL || undefined,
+              role: UserRole.STAFF, // Default role
+              createdAt: serverTimestamp(),
+            };
+            await setDoc(userDocRef, newProfile);
+            userDoc = await getDoc(userDocRef);
+          }
+
+          setProfile(userDoc.data() as UserProfile);
+        } catch (err) {
+          console.error("Profile sync failed:", err);
         }
       } else {
-        setUserRole(null);
+        setProfile(null);
       }
       setLoading(false);
     });
+
+    return unsubscribe;
   }, []);
 
-  return (
-    <AuthContext.Provider value={{ user, userRole, loading }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  const value = {
+    user,
+    profile,
+    loading,
+    isAdmin: profile?.role === UserRole.ADMIN,
+    isStaff: profile?.role === UserRole.STAFF || profile?.role === UserRole.ADMIN,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

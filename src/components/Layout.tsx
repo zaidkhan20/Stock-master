@@ -45,7 +45,8 @@ const NavLink = ({ to, icon: Icon, children, collapsed }: { to: string, icon: an
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [collapsed, setCollapsed] = React.useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
-  const { userRole } = useAuth();
+  const { profile, isAdmin } = useAuth();
+  const location = useLocation();
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
@@ -78,7 +79,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           <NavLink to="/sales" icon={Truck} collapsed={collapsed}>Sales</NavLink>
           <NavLink to="/suppliers" icon={ClipboardList} collapsed={collapsed}>Suppliers</NavLink>
           <NavLink to="/wholesalers" icon={Users} collapsed={collapsed}>Wholesalers</NavLink>
-          {(userRole?.role === 'ADMIN' || userRole?.role === 'MANAGER') && (
+          {isAdmin && (
             <>
               <NavLink to="/employees" icon={Users} collapsed={collapsed}>Employees</NavLink>
               <NavLink to="/assets" icon={Factory} collapsed={collapsed}>Asset Planning</NavLink>
@@ -138,11 +139,18 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         </div>
       )}
 
-      <main className="flex-1 h-screen overflow-y-auto p-4 md:p-8">
-        <div className="max-w-7xl mx-auto uppercase text-[10px] tracking-widest text-slate-400 font-bold mb-1">
-          {location.pathname === '/' ? 'Overview' : location.pathname.substring(1)}
+      <main 
+        className="flex-1 min-h-screen overflow-y-auto overflow-x-hidden p-4 md:p-8 relative"
+        onClick={() => mobileMenuOpen && setMobileMenuOpen(false)}
+      >
+        <div className="max-w-7xl mx-auto flex items-center justify-between uppercase text-[10px] tracking-widest text-slate-400 font-bold mb-4">
+          <span>{location.pathname === '/' ? 'System Overview' : location.pathname.substring(1)}</span>
+          <div className="flex items-center gap-2 text-slate-900">
+            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span>Node Active</span>
+          </div>
         </div>
-        <div className="max-w-7xl mx-auto">
+        <div className="max-w-7xl mx-auto overflow-x-auto">
           {children}
         </div>
       </main>
