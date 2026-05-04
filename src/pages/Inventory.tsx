@@ -1,394 +1,284 @@
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import React, { useEffect, useState } from 'react';
+import { collection, query, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { db } from '../lib/firebase';
+import { useAuth } from '../contexts/AuthContext';
 import { 
   Plus, 
   Search, 
   Filter, 
   MoreVertical, 
-  Edit2, 
-  Trash2, 
-  AlertCircle,
-  ArrowUpDown,
+  ArrowUpDown, 
   Download,
-  Terminal,
-  Activity,
-  Box,
-  ChevronRight,
-  ArrowRight,
-  ShieldAlert
+  Package,
+  History
 } from 'lucide-react';
-import { useCollection } from '../hooks/useCollection';
-import { Product, Category } from '../types';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
-import { useAuth } from '../context/AuthContext';
-import { cn } from '../lib/utils';
+import { motion, AnimatePresence } from 'motion/react';
+
+interface Product {
+  id: string;
+  name: string;
+  sku: string;
+  quantity: number;
+  minStock: number;
+  sellingPrice: number;
+  unit: string;
+  categoryId: string;
+  description: string;
+}
 
 export const Inventory: React.FC = () => {
-  const { isStaff, isAdmin, profile } = useAuth();
-  const { data: products, loading } = useCollection<Product>('products');
-  const { data: categories } = useCollection<Category>('categories');
+  const [products, setProducts] = useState<Product[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const { userRole } = useAuth();
 
-  const filteredProducts = products.filter(p => {
-    const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         p.sku.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = selectedCategory === 'all' || p.categoryId === selectedCategory;
-    return matchesSearch && matchesCategory;
+  // New Product Form State
+  const [newProduct, setNewProduct] = useState({
+    name: '',
+    sku: '',
+    minStock: 0,
+    sellingPrice: 0,
+    unit: 'Units',
+    description: ''
   });
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  useEffect(() => {
+    const q = query(collection(db, 'products'));
+    return onSnapshot(q, (snapshot) => {
+      const prods = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
+      setProducts(prods);
+    });
+  }, []);
+
+  const handleAddProduct = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!db || !profile) return;
-
-    const formData = new FormData(e.currentTarget);
-    const data = {
-      name: formData.get('name') as string,
-      sku: formData.get('sku') as string,
-      categoryId: formData.get('categoryId') as string,
-      quantity: Number(formData.get('quantity')),
-      minStock: Number(formData.get('minStock')),
-      price: Number(formData.get('price')),
-      unit: formData.get('unit') as string,
-      description: formData.get('description') as string,
-      updatedAt: serverTimestamp(),
-      updatedBy: profile.id,
-    };
-
     try {
-      if (editingProduct) {
-        await updateDoc(doc(db, 'products', editingProduct.id), data);
-      } else {
-        await addDoc(collection(db, 'products'), data);
-      }
-      setIsModalOpen(false);
-      setEditingProduct(null);
+      await addDoc(collection(db, 'products'), {
+        ...newProduct,
+        quantity: 0, // Initial quantity is 0, must be added via "Purchases"
+        updatedAt: serverTimestamp()
+      });
+      setShowAddModal(false);
+      setNewProduct({ name: '', sku: '', minStock: 0, sellingPrice: 0, unit: 'Units', description: '' });
     } catch (err) {
-      handleFirestoreError(err, editingProduct ? OperationType.UPDATE : OperationType.CREATE, 'products');
+      console.error(err);
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!db || !window.confirm('Terminate entity signature (Delete Product)?')) return;
-    try {
-      const productPath = `products/${id}`;
-      await deleteDoc(doc(db, 'products', id));
-    } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `products/${id}`);
-    }
-  };
+  const filteredProducts = products.filter(p => 
+    p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    p.sku.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-6 border-l-4 border-slate-950 pl-6 py-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black uppercase tracking-tighter leading-tight">Inventory Registry</h1>
-          <p className="text-[11px] font-mono text-zinc-400 uppercase tracking-widest flex items-center gap-2 mt-1">
-            <Box size={12} className="text-zinc-400" /> 
-            Active SKU Nodes: {filteredProducts.length} / Global: {products.length}
-          </p>
+          <h1 className="text-2xl font-bold text-slate-900">Inventory Management</h1>
+          <p className="text-slate-500">Track current stock levels and batch details</p>
         </div>
         <div className="flex items-center gap-3">
-          <button className="h-10 px-4 rounded border border-zinc-200 bg-white hover:bg-zinc-50 transition-colors text-[10px] font-bold uppercase tracking-widest flex items-center gap-2">
-            <Download size={14} />
+          <button className="flex items-center gap-2 px-4 py-2 text-slate-600 font-bold hover:bg-slate-100 rounded-lg transition-colors">
+            <Download className="w-4 h-4" />
             Export CSV
           </button>
-          {isStaff && (
-            <button 
-              onClick={() => { setEditingProduct(null); setIsModalOpen(true); }}
-              className="h-10 px-4 rounded bg-slate-950 text-white hover:bg-zinc-800 transition-colors text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 shadow-sm"
-            >
-              <Plus size={14} />
-              Initialize SKU
-            </button>
-          )}
+          <button 
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center gap-2 px-6 py-2 bg-slate-900 text-white font-bold rounded-lg hover:bg-slate-800 transition-all active:scale-95 shadow-lg shadow-slate-200"
+          >
+            <Plus className="w-5 h-5" />
+            Add Product
+          </button>
         </div>
-      </header>
+      </div>
 
-      {/* Control Panel */}
-      <div className="bg-white border border-zinc-200 p-4 rounded-sm flex flex-col md:flex-row gap-4 items-center">
-        <div className="relative flex-1 group w-full">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-slate-950 transition-colors" size={16} />
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
           <input 
             type="text" 
-            placeholder="FILTER BY SKU OR COMPONENT NAME..."
-            className="w-full bg-zinc-50 border border-zinc-100 rounded-sm pl-10 pr-4 py-2.5 text-[11px] font-mono uppercase tracking-tight focus:ring-1 focus:ring-slate-950/10 focus:border-slate-950 outline-none transition-all placeholder:text-zinc-300"
+            placeholder="Search by name or SKU..." 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all"
           />
         </div>
-        <div className="flex gap-4 w-full md:w-auto">
-          <div className="flex items-center gap-3 bg-zinc-50 px-3 py-1 border border-zinc-100 rounded-sm">
-             <Filter size={14} className="text-zinc-400" />
-             <select 
-               className="bg-transparent border-none text-[10px] font-bold uppercase tracking-widest focus:ring-0 cursor-pointer"
-               value={selectedCategory}
-               onChange={(e) => setSelectedCategory(e.target.value)}
-             >
-               <option value="all">ALL_CATEGORIES</option>
-               {categories.map(c => (
-                 <option key={c.id} value={c.id}>{c.name.toUpperCase()}</option>
-               ))}
-             </select>
-          </div>
+        <div className="flex gap-2">
+          <button className="flex items-center gap-2 px-4 py-2 border border-slate-200 rounded-xl font-medium text-slate-600 hover:bg-slate-50">
+            <Filter className="w-4 h-4" />
+            Category
+          </button>
+          <button className="flex items-center gap-2 px-4 py-2 border border-slate-200 rounded-xl font-medium text-slate-600 hover:bg-slate-50">
+            <ArrowUpDown className="w-4 h-4" />
+            Stock Level
+          </button>
         </div>
       </div>
 
-      {/* Registry Grid */}
-      <div className="bg-white border border-zinc-200 rounded-sm overflow-hidden overflow-x-auto shadow-sm">
-        <table className="w-full border-collapse">
-          <thead>
-            <tr className="border-b border-zinc-200 bg-zinc-50/50">
-              <th className="p-4 text-left">
-                 <div className="flex items-center gap-2 text-[10px] font-serif italic text-zinc-400 uppercase tracking-widest">
-                   Component Details
-                   <ArrowUpDown size={10} />
-                 </div>
-              </th>
-              <th className="p-4 text-left text-[10px] font-serif italic text-zinc-400 uppercase tracking-widest">SKU_ID</th>
-              <th className="p-4 text-left text-[10px] font-serif italic text-zinc-400 uppercase tracking-widest">Category</th>
-              <th className="p-4 text-center text-[10px] font-serif italic text-zinc-400 uppercase tracking-widest">Available</th>
-              <th className="p-4 text-right text-[10px] font-serif italic text-zinc-400 uppercase tracking-widest">Unit_Price</th>
-              <th className="p-4 text-center text-[10px] font-serif italic text-zinc-400 uppercase tracking-widest">Status</th>
-              <th className="p-4 text-right"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-100 font-sans">
-            {filteredProducts.map((product) => (
-              <tr key={product.id} className="group hover:bg-zinc-50/50 transition-colors">
-                <td className="p-4">
-                  <div className="flex flex-col">
-                    <span className="text-xs font-bold uppercase tracking-tight text-slate-950">{product.name}</span>
-                    <span className="text-[10px] text-zinc-400 truncate max-w-[200px] mt-0.5">{product.description}</span>
-                  </div>
-                </td>
-                <td className="p-4">
-                  <span className="text-[11px] font-mono text-zinc-400 uppercase tracking-tighter bg-zinc-100 px-1.5 py-0.5 rounded-sm">{product.sku}</span>
-                </td>
-                <td className="p-4">
-                   <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
-                     {categories.find(c => c.id === product.categoryId)?.name || 'UNCLASSIFIED'}
-                   </span>
-                </td>
-                <td className="p-4 text-center">
-                  <div className="flex flex-col items-center">
-                    <span className={cn(
-                      "text-[12px] font-mono font-black tabular-nums",
-                      product.quantity <= product.minStock ? "text-red-600" : "text-slate-950"
-                    )}>
-                      {product.quantity.toString().padStart(3, '0')}
-                    </span>
-                    <span className="text-[9px] font-mono text-zinc-300 uppercase mt-0.5">{product.unit || 'PCS'}</span>
-                  </div>
-                </td>
-                <td className="p-4 text-right">
-                  <div className="flex flex-col items-end">
-                    <span className="text-[11px] font-mono font-bold text-slate-950">${product.price.toFixed(2)}</span>
-                    <span className="text-[9px] font-mono text-zinc-300 uppercase">USD</span>
-                  </div>
-                </td>
-                <td className="p-4">
-                  <div className="flex justify-center">
-                    {product.quantity === 0 ? (
-                      <span className="px-2 py-0.5 bg-red-950 text-white text-[9px] font-bold rounded-sm uppercase tracking-tighter">Depleted</span>
-                    ) : product.quantity <= product.minStock ? (
-                      <span className="px-2 py-0.5 bg-amber-100 text-amber-800 text-[9px] font-bold rounded-sm uppercase tracking-tighter flex items-center gap-1">
-                        <AlertCircle size={10} /> Low_Stock
-                      </span>
-                    ) : (
-                      <span className="px-2 py-0.5 bg-green-100 text-green-800 text-[9px] font-bold rounded-sm uppercase tracking-tighter">Optimal</span>
-                    )}
-                  </div>
-                </td>
-                <td className="p-4 text-right">
-                  <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {isStaff && (
-                      <>
-                        <button 
-                          onClick={() => { setEditingProduct(product); setIsModalOpen(true); }}
-                          className="p-2 text-zinc-400 hover:text-slate-950 hover:bg-zinc-200 transition-all rounded"
-                        >
-                          <Edit2 size={14} />
-                        </button>
-                        {isAdmin && (
-                          <button 
-                            onClick={() => handleDelete(product.id)}
-                            className="p-2 text-zinc-400 hover:text-red-600 hover:bg-red-50 transition-all rounded"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        )}
-                        <button className="p-2 text-zinc-400 hover:text-slate-950 hover:bg-white border border-transparent hover:border-zinc-200 transition-all rounded">
-                          <ChevronRight size={14} />
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </td>
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="bg-slate-50 text-slate-500 text-[10px] uppercase tracking-wider font-bold">
+                <th className="px-6 py-4">Product Info</th>
+                <th className="px-6 py-4">SKU/Batch</th>
+                <th className="px-6 py-4">Quantity</th>
+                <th className="px-6 py-4">Selling Price</th>
+                <th className="px-6 py-4">Status</th>
+                <th className="px-6 py-4 text-right">Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-        
-        {loading && (
-          <div className="py-20 flex flex-col items-center justify-center gap-4">
-             <div className="w-8 h-8 border-2 border-zinc-200 border-t-slate-950 rounded-full animate-spin" />
-             <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest">Accessing Registry...</span>
-          </div>
-        )}
-        
-        {!loading && filteredProducts.length === 0 && (
-          <div className="py-20 text-center flex flex-col items-center gap-4">
-             <Terminal size={32} className="text-zinc-200" />
-             <div className="space-y-1">
-                <p className="text-[11px] font-black uppercase tracking-widest text-zinc-400">No matching nodes found</p>
-                <p className="text-[10px] font-mono text-zinc-300">SYSTEM_ERROR_CODE: 404_SKU_NULL</p>
-             </div>
-             <button 
-               onClick={() => { setSearchTerm(''); setSelectedCategory('all'); }}
-               className="mt-2 text-[10px] font-bold text-slate-950 hover:underline underline-offset-4 uppercase tracking-widest"
-             >
-                Reset Filter Mask
-             </button>
-          </div>
-        )}
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filteredProducts.map((p) => (
+                <tr key={p.id} className="hover:bg-slate-50 transition-colors group">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 group-hover:text-slate-600 transition-colors">
+                        <Package className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-slate-900">{p.name}</div>
+                        <div className="text-xs text-slate-500">{p.description || 'No description'}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <code className="text-xs font-mono bg-slate-100 px-2 py-1 rounded text-slate-600">{p.sku}</code>
+                  </td>
+                  <td className="px-6 py-4 font-mono font-bold text-slate-900">
+                    {p.quantity} {p.unit}
+                  </td>
+                  <td className="px-6 py-4 text-slate-600 font-bold">
+                    ₨ {p.sellingPrice.toLocaleString()}
+                  </td>
+                  <td className="px-6 py-4">
+                    {p.quantity <= p.minStock ? (
+                      <span className="px-2.5 py-1 bg-rose-100 text-rose-700 rounded-full text-[10px] font-black uppercase">Low Stock</span>
+                    ) : (
+                      <span className="px-2.5 py-1 bg-emerald-100 text-emerald-700 rounded-full text-[10px] font-black uppercase">In Stock</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                       <button className="p-2 hover:bg-slate-200 rounded-lg transition-colors text-slate-400 hover:text-slate-900">
+                         <History className="w-4 h-4" />
+                       </button>
+                       <button className="p-2 hover:bg-slate-200 rounded-lg transition-colors text-slate-400">
+                         <MoreVertical className="w-4 h-4" />
+                       </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {filteredProducts.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-6 py-12 text-center text-slate-400">
+                    No products found. Add your first product to get started.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {/* Add/Edit Modal */}
+      {/* Add Product Modal */}
       <AnimatePresence>
-        {isModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        {showAddModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
             <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsModalOpen(false)}
-              className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm"
-            />
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-2xl bg-white border border-zinc-200 p-8 shadow-2xl rounded-sm"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden"
             >
-              <div className="flex justify-between items-start mb-8 border-l-4 border-slate-950 pl-4">
-                <div>
-                  <h2 className="text-xl font-black uppercase tracking-tighter">SKU Initialization</h2>
-                  <p className="text-[10px] font-mono text-zinc-400 mt-1 uppercase tracking-widest">Mode: {editingProduct ? 'Update_Existing_Node' : 'Create_New_Entity'}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-[9px] font-serif italic text-zinc-400 uppercase tracking-widest">Authorized By</p>
-                  <p className="text-[11px] font-bold uppercase tracking-tight">{profile?.name}</p>
-                </div>
+              <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+                <h2 className="text-xl font-bold text-slate-900">Add New Product</h2>
+                <button onClick={() => setShowAddModal(false)}><X className="w-6 h-6 text-slate-400 hover:text-slate-900" /></button>
               </div>
-
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Component Name</label>
+              <form onSubmit={handleAddProduct} className="p-6 space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Product Name</label>
                     <input 
-                      name="name" 
-                      required 
-                      defaultValue={editingProduct?.name}
-                      placeholder="e.g. CORE-PROCESSOR-X1"
-                      className="w-full bg-zinc-50 border border-zinc-200 p-3 text-[11px] font-bold uppercase tracking-tight focus:ring-1 focus:ring-slate-950 outline-none rounded-sm"
+                      required
+                      type="text" 
+                      placeholder="e.g. Cement Bag 50kg"
+                      value={newProduct.name}
+                      onChange={(e) => setNewProduct({...newProduct, name: e.target.value})}
+                      className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-900 outline-none"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">SKU_SERIAL</label>
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">SKU Code</label>
                     <input 
-                      name="sku" 
-                      required 
-                      defaultValue={editingProduct?.sku}
-                      placeholder="SKU-XXXX-XXXX"
-                      className="w-full bg-zinc-50 border border-zinc-200 p-3 text-[11px] font-mono uppercase tracking-tight focus:ring-1 focus:ring-slate-950 outline-none rounded-sm"
+                      type="text" 
+                      placeholder="e.g. CMT-001"
+                      value={newProduct.sku}
+                      onChange={(e) => setNewProduct({...newProduct, sku: e.target.value})}
+                      className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-900 outline-none"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Category Tag</label>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Selling Price (PKR)</label>
+                    <input 
+                      type="number" 
+                      placeholder="0.00"
+                      value={newProduct.sellingPrice}
+                      onChange={(e) => setNewProduct({...newProduct, sellingPrice: Number(e.target.value)})}
+                      className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-900 outline-none"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Unit Type</label>
                     <select 
-                      name="categoryId" 
-                      required 
-                      defaultValue={editingProduct?.categoryId}
-                      className="w-full bg-zinc-50 border border-zinc-200 p-3 text-[11px] font-bold uppercase tracking-widest focus:ring-1 focus:ring-slate-950 outline-none rounded-sm cursor-pointer"
+                      value={newProduct.unit}
+                      onChange={(e) => setNewProduct({...newProduct, unit: e.target.value})}
+                      className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-900 outline-none"
                     >
-                      <option value="">SELECT_CATEGORY</option>
-                      {categories.map(c => (
-                        <option key={c.id} value={c.id}>{c.name.toUpperCase()}</option>
-                      ))}
+                      <option>Units</option>
+                      <option>Kg</option>
+                      <option>Liter</option>
+                      <option>Feet</option>
+                      <option>Bag</option>
                     </select>
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Unit of Measure</label>
-                    <input 
-                      name="unit" 
-                      required 
-                      defaultValue={editingProduct?.unit || 'pcs'}
-                      placeholder="pcs, kg, box"
-                      className="w-full bg-zinc-50 border border-zinc-200 p-3 text-[11px] font-bold uppercase tracking-tight focus:ring-1 focus:ring-slate-950 outline-none rounded-sm"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Initial Quantity</label>
-                    <input 
-                      name="quantity" 
-                      type="number" 
-                      required 
-                      defaultValue={editingProduct?.quantity || 0}
-                      className="w-full bg-zinc-50 border border-zinc-200 p-3 text-[11px] font-mono font-bold focus:ring-1 focus:ring-slate-950 outline-none rounded-sm"
-                    />
-                  </div>
-                   <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Min. Threshold</label>
-                    <input 
-                      name="minStock" 
-                      type="number" 
-                      required 
-                      defaultValue={editingProduct?.minStock || 10}
-                      className="w-full bg-zinc-50 border border-zinc-200 p-3 text-[11px] font-mono font-bold focus:ring-1 focus:ring-slate-950 outline-none rounded-sm"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Unit Val (USD)</label>
-                    <input 
-                      name="price" 
-                      type="number" 
-                      step="0.01" 
-                      required 
-                      defaultValue={editingProduct?.price || 0}
-                      className="w-full bg-zinc-50 border border-zinc-200 p-3 text-[11px] font-mono font-bold focus:ring-1 focus:ring-slate-950 outline-none rounded-sm"
-                    />
-                  </div>
                 </div>
-
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Component Description</label>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Low Stock Threshold</label>
+                  <input 
+                    type="number" 
+                    placeholder="Alert when stock reaches..."
+                    value={newProduct.minStock}
+                    onChange={(e) => setNewProduct({...newProduct, minStock: Number(e.target.value)})}
+                    className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-900 outline-none"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Description</label>
                   <textarea 
-                    name="description" 
-                    rows={3} 
-                    defaultValue={editingProduct?.description}
-                    className="w-full bg-zinc-50 border border-zinc-200 p-3 text-[11px] focus:ring-1 focus:ring-slate-950 outline-none rounded-sm"
-                    placeholder="Enter detailed specifications..."
-                  ></textarea>
+                    rows={3}
+                    placeholder="Additional details..."
+                    value={newProduct.description}
+                    onChange={(e) => setNewProduct({...newProduct, description: e.target.value})}
+                    className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-900 outline-none resize-none"
+                  />
                 </div>
-
-                <div className="flex justify-end gap-3 pt-6 border-t border-zinc-100">
+                <div className="pt-4 flex gap-3">
                   <button 
-                    type="button" 
-                    onClick={() => setIsModalOpen(false)}
-                    className="px-6 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-400 hover:text-slate-950 transition-colors"
+                    type="button"
+                    onClick={() => setShowAddModal(false)}
+                    className="flex-1 px-6 py-3 bg-slate-100 text-slate-900 font-bold rounded-xl hover:bg-slate-200 transition-colors"
                   >
-                    Abort
+                    Cancel
                   </button>
                   <button 
                     type="submit"
-                    className="px-8 py-3 bg-slate-950 text-white text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-800 transition-all flex items-center gap-2 shadow-lg"
+                    className="flex-1 px-6 py-3 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 transition-all shadow-lg shadow-slate-200"
                   >
-                    Commit Changes
-                    <ArrowRight size={14} />
+                    Save Product
                   </button>
                 </div>
               </form>

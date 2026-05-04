@@ -1,288 +1,236 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { collection, query, getDocs, limit, orderBy, where } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import { 
-  BarChart, 
-  Bar, 
+  TrendingUp, 
+  Package, 
+  AlertTriangle, 
+  CreditCard,
+  ArrowUpRight,
+  ArrowDownRight
+} from 'lucide-react';
+import { 
+  AreaChart, 
+  Area, 
   XAxis, 
   YAxis, 
   CartesianGrid, 
   Tooltip, 
-  ResponsiveContainer, 
-  Cell,
-  LineChart,
-  Line,
-  AreaChart,
-  Area
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  Cell
 } from 'recharts';
-import { 
-  TrendingUp, 
-  Package, 
-  AlertCircle, 
-  ArrowUpRight, 
-  ArrowDownRight,
-  Clock,
-  Activity,
-  ShieldAlert,
-  Zap
-} from 'lucide-react';
-import { useCollection } from '../hooks/useCollection';
-import { Product, Transaction } from '../types';
-import { format } from 'date-fns';
-import { orderBy, limit } from 'firebase/firestore';
-import { cn } from '../lib/utils';
+import { motion } from 'motion/react';
 
-const MetricCard: React.FC<{ 
-  title: string; 
-  value: string | number; 
-  secondary?: string;
-  icon: React.ReactNode; 
-  trend?: string; 
-  trendUp?: boolean 
-}> = ({ title, value, secondary, icon, trend, trendUp }) => (
-  <div className="bg-white p-5 border border-zinc-200 rounded-sm shadow-[2px_2px_0px_0px_rgba(0,0,0,0.05)] flex flex-col justify-between h-32 relative overflow-hidden group">
-    <div className="flex justify-between items-start z-10">
-      <div className="text-zinc-400 group-hover:text-slate-950 transition-colors">
-        {icon}
+const StatCard = ({ title, value, icon: Icon, trend, color }: any) => (
+  <motion.div 
+    whileHover={{ y: -5 }}
+    className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm"
+  >
+    <div className="flex items-center justify-between mb-4">
+      <div className={cn("p-2 rounded-lg bg-opacity-10", color)}>
+        <Icon className={cn("w-6 h-6", color.replace('bg-', 'text-'))} />
       </div>
       {trend && (
-        <div className={cn(
-          "text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border tracking-tighter flex items-center gap-0.5",
-          trendUp ? "bg-green-50 text-green-700 border-green-100" : "bg-red-50 text-red-700 border-red-100"
-        )}>
-          {trendUp ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}
-          {trend}
-        </div>
+        <span className={cn("text-xs font-bold flex items-center gap-0.5", trend > 0 ? "text-emerald-600" : "text-rose-600")}>
+          {trend > 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+          {Math.abs(trend)}%
+        </span>
       )}
     </div>
-    <div className="z-10">
-      <h3 className="text-[10px] font-serif italic text-zinc-400 uppercase tracking-widest mb-1">{title}</h3>
-      <div className="flex items-baseline gap-2">
-        <p className="text-2xl font-mono font-bold tracking-tighter text-slate-950 leading-none">{value}</p>
-        {secondary && <span className="text-[10px] font-mono text-zinc-400">{secondary}</span>}
-      </div>
-    </div>
-    <div className="absolute top-0 right-0 p-2 opacity-5 scale-150 rotate-12 group-hover:rotate-0 transition-transform">
-       {icon}
-    </div>
-  </div>
+    <div className="text-slate-500 text-sm font-medium">{title}</div>
+    <div className="text-2xl font-bold text-slate-900 mt-1">{value}</div>
+  </motion.div>
 );
 
+function cn(...classes: string[]) {
+  return classes.filter(Boolean).join(' ');
+}
+
 export const Dashboard: React.FC = () => {
-  const { data: products } = useCollection<Product>('products');
-  const { data: recentTransactions } = useCollection<Transaction>('transactions', [orderBy('timestamp', 'desc'), limit(10)]);
+  const [stats, setStats] = useState({
+    totalSales: 0,
+    totalProfit: 0,
+    lowStock: 0,
+    pendingPayments: 0
+  });
 
-  const totalStockValue = products.reduce((acc, p) => acc + (p.price * p.quantity), 0);
-  const totalCostValue = products.reduce((acc, p) => acc + ((p.costPrice || p.price * 0.7) * p.quantity), 0);
-  const lowStockProducts = products.filter(p => p.quantity <= p.minStock && p.quantity > 0);
-  const outOfStockProducts = products.filter(p => p.quantity === 0);
-
-  const chartData = products.slice(0, 8).map(p => ({
-    name: p.name.length > 10 ? p.name.substring(0, 10) + '...' : p.name,
-    stock: p.quantity,
-    min: p.minStock
-  }));
-
-  // Mock activity data for the sparkline feel
-  const activityData = [
-    { name: 'Mon', value: 400 },
-    { name: 'Tue', value: 300 },
-    { name: 'Wed', value: 600 },
-    { name: 'Thu', value: 800 },
-    { name: 'Fri', value: 500 },
-    { name: 'Sat', value: 900 },
-    { name: 'Sun', value: 1000 },
+  const chartData = [
+    { name: 'Mon', sales: 4000, profit: 2400 },
+    { name: 'Tue', sales: 3000, profit: 1398 },
+    { name: 'Wed', sales: 2000, profit: 9800 },
+    { name: 'Thu', sales: 2780, profit: 3908 },
+    { name: 'Fri', sales: 1890, profit: 4800 },
+    { name: 'Sat', sales: 2390, profit: 3800 },
+    { name: 'Sun', sales: 3490, profit: 4300 },
   ];
 
   return (
-    <div className="space-y-8 pb-10">
-      <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-l-4 border-slate-950 pl-6 py-2">
+    <div className="space-y-8 animate-in fade-in duration-500">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black uppercase tracking-tighter leading-tight">System Overview</h1>
-          <p className="text-[11px] font-mono text-zinc-400 uppercase tracking-widest flex items-center gap-2 mt-1">
-            <Activity size={12} className="text-green-500" /> 
-            Real-time Inventory Nodes: {products.length}
-          </p>
+          <h1 className="text-2xl font-bold text-slate-900">Dashboard Overview</h1>
+          <p className="text-slate-500">Real-time business performance metrics</p>
         </div>
-        <div className="flex items-center gap-4 text-right">
-           <div className="hidden sm:block">
-              <p className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest leading-none">Timestamp</p>
-              <p className="font-mono text-xs font-bold mt-1 text-slate-950">{format(new Date(), 'yyyy-MM-dd HH:mm:ss')}</p>
-           </div>
-           <div className="h-8 w-px bg-zinc-200 hidden sm:block" />
-           <div className="flex flex-col items-end">
-              <span className="text-[10px] font-serif italic text-zinc-400">Inventory Status</span>
-              <span className={cn(
-                "text-[10px] font-bold px-2 py-0.5 rounded-sm mt-1 uppercase tracking-widest",
-                outOfStockProducts.length > 0 ? "bg-red-950 text-white" : "bg-green-100 text-green-800"
-              )}>
-                {outOfStockProducts.length > 0 ? 'CRITICAL_ALERTS_ACTIVE' : 'NOMINAL_OPERATIONS'}
-              </span>
-           </div>
+        <div className="flex items-center gap-2 text-sm text-slate-500 font-medium bg-slate-100 px-4 py-2 rounded-full">
+          Currency: <span className="text-slate-900 font-bold">PKR (₨)</span>
         </div>
-      </header>
+      </div>
 
-      {/* Metrics Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard 
-          title="Global Asset Count" 
-          value={products.reduce((acc, p) => acc + p.quantity, 0)} 
-          secondary="UNITS"
-          icon={<Package size={16} />} 
-          trend="+2.4%"
-          trendUp={true}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard 
+          title="Monthly Revenue" 
+          value="₨ 482,000" 
+          icon={TrendingUp} 
+          trend={12.5} 
+          color="bg-slate-900" 
         />
-        <MetricCard 
-          title="Estimated Net Value" 
-          value={`$${totalStockValue.toLocaleString()}`} 
-          secondary="USD"
-          icon={<Zap size={16} />} 
-          trend="+14.1%"
-          trendUp={true}
+        <StatCard 
+          title="Monthly Profit" 
+          value="₨ 124,500" 
+          icon={TrendingUp} 
+          trend={8.2} 
+          color="bg-emerald-600" 
         />
-        <MetricCard 
-          title="Threshold Infractions" 
-          value={lowStockProducts.length} 
-          secondary="SKUs"
-          icon={<ShieldAlert size={16} />} 
-          trend="-1"
-          trendUp={false}
+        <StatCard 
+          title="Critical Stock" 
+          value="14 Items" 
+          icon={AlertTriangle} 
+          color="bg-rose-500" 
         />
-        <MetricCard 
-          title="Depleted Inventory" 
-          value={outOfStockProducts.length} 
-          secondary="SKUs"
-          icon={<AlertCircle size={16} />} 
+        <StatCard 
+          title="Wholesaler Debts" 
+          value="₨ 210,000" 
+          icon={CreditCard} 
+          color="bg-amber-500" 
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main Analytics View */}
-        <div className="lg:col-span-2 bg-white border border-zinc-200 rounded-sm p-6 overflow-hidden relative">
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="text-xs font-black uppercase tracking-widest flex items-center gap-2">
-              <Activity size={14} />
-              Operational Throughput
-            </h2>
-            <div className="flex items-center gap-4">
-               <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 bg-slate-950 rounded-full" />
-                  <span className="text-[10px] font-mono text-zinc-400">CURRENT_LEVELS</span>
-               </div>
-               <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 bg-zinc-200 rounded-full" />
-                  <span className="text-[10px] font-mono text-zinc-400">MIN_THRESHOLD</span>
-               </div>
-            </div>
-          </div>
-          
-          <div className="h-[300px] w-full">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+          <h2 className="text-lg font-bold text-slate-900 mb-6 font-display">Sales vs Profit Trend</h2>
+          <div className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{top: 0, right: 0, left: -20, bottom: 0}}>
-                <CartesianGrid strokeDasharray="2 2" vertical={false} stroke="#f4f4f5" />
+              <AreaChart data={chartData}>
+                <defs>
+                  <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#0f172a" stopOpacity={0.1}/>
+                    <stop offset="95%" stopColor="#0f172a" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis 
                   dataKey="name" 
                   axisLine={false} 
                   tickLine={false} 
-                  tick={{fill: '#a1a1aa', fontSize: 10, fontFamily: 'JetBrains Mono'}} 
-                  dy={10} 
+                  tick={{ fill: '#64748b', fontSize: 12 }} 
                 />
                 <YAxis 
                   axisLine={false} 
                   tickLine={false} 
-                  tick={{fill: '#a1a1aa', fontSize: 10, fontFamily: 'JetBrains Mono'}} 
+                  tick={{ fill: '#64748b', fontSize: 12 }}
+                  tickFormatter={(val) => `₨${val/1000}k`}
                 />
                 <Tooltip 
-                  cursor={{fill: '#f4f4f5'}} 
-                  contentStyle={{
-                    borderRadius: '0px', 
-                    border: '1px solid #e4e4e7', 
-                    boxShadow: 'none',
-                    fontSize: '11px',
-                    fontFamily: 'JetBrains Mono'
-                  }}
+                  contentStyle={{ 
+                    borderRadius: '12px', 
+                    border: 'none', 
+                    boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
+                    padding: '12px'
+                  }} 
                 />
-                <Bar dataKey="stock" fill="#020617" />
-                <Bar dataKey="min" fill="#e4e4e7" />
-              </BarChart>
+                <Area 
+                  type="monotone" 
+                  dataKey="sales" 
+                  stroke="#0f172a" 
+                  strokeWidth={3}
+                  fillOpacity={1} 
+                  fill="url(#colorSales)" 
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="profit" 
+                  stroke="#10b981" 
+                  strokeWidth={3}
+                  fillOpacity={0} 
+                  fill="none" 
+                />
+              </AreaChart>
             </ResponsiveContainer>
-          </div>
-          
-          <div className="mt-6 pt-6 border-t border-zinc-100 grid grid-cols-3 gap-6">
-             <div>
-                <p className="text-[9px] font-serif italic text-zinc-400 uppercase tracking-widest">Efficiency</p>
-                <p className="text-xs font-mono font-bold mt-1">94.2%</p>
-             </div>
-             <div>
-                <p className="text-[9px] font-serif italic text-zinc-400 uppercase tracking-widest">Turnover Rate</p>
-                <p className="text-xs font-mono font-bold mt-1">12.5x / YR</p>
-             </div>
-             <div>
-                <p className="text-[9px] font-serif italic text-zinc-400 uppercase tracking-widest">Storage CAP</p>
-                <p className="text-xs font-mono font-bold mt-1">821 / 1000m²</p>
-             </div>
           </div>
         </div>
 
-        {/* System Activity Log */}
-        <div className="bg-white border border-zinc-200 rounded-sm p-6 flex flex-col">
-          <h2 className="text-xs font-black uppercase tracking-widest flex items-center gap-2 mb-8">
-            <Terminal size={14} />
-            Telemetry Log
-          </h2>
-          <div className="flex-1 space-y-4 overflow-y-auto max-h-[400px] pr-2 scrollbar-thin scrollbar-thumb-zinc-200">
-            {recentTransactions.map((tx) => (
-              <div key={tx.id} className="flex gap-3 group border-b border-zinc-50 pb-4 last:border-0">
-                <div className={cn(
-                  "shrink-0 w-8 h-8 rounded-sm flex items-center justify-center font-mono text-[10px] font-bold",
-                  tx.type === 'IN' ? "bg-green-50 text-green-700 border border-green-100" : 
-                  tx.type === 'OUT' ? "bg-red-50 text-red-700 border border-red-100" : "bg-blue-50 text-blue-700 border border-blue-100"
-                )}>
-                  {tx.type === 'IN' ? 'INC' : tx.type === 'OUT' ? 'DEC' : 'ADJ'}
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col">
+          <h2 className="text-lg font-bold text-slate-900 mb-6 font-display">Top Wholesalers</h2>
+          <div className="space-y-4 flex-1">
+            {[
+              { name: 'Lahore Trading Co.', total: 120000, debt: 45000 },
+              { name: 'Al-Madina General Store', total: 95000, debt: 0 },
+              { name: 'Fast Distribution', total: 82000, debt: 20000 },
+              { name: 'Khyber Wholesalers', total: 65000, debt: 15000 },
+            ].map((customer, i) => (
+              <div key={i} className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 transition-colors">
+                <div>
+                  <div className="font-bold text-slate-900 text-sm">{customer.name}</div>
+                  <div className="text-xs text-slate-500">Sales: ₨{customer.total.toLocaleString()}</div>
                 </div>
-                <div className="flex-1">
-                  <div className="flex justify-between items-start">
-                    <p className="text-[11px] font-bold text-slate-950 uppercase tracking-tight truncate max-w-[100px]">
-                      {tx.productName || tx.productId.slice(0, 8)}
-                    </p>
-                    <span className="text-[9px] font-mono text-zinc-400">
-                      {tx.timestamp?.toDate ? format(tx.timestamp.toDate(), 'HH:mm') : 'NOW'}
-                    </span>
+                <div className="text-right">
+                  <div className={cn("text-xs font-bold", customer.debt > 0 ? "text-amber-600" : "text-emerald-600")}>
+                    {customer.debt > 0 ? `Debt: ₨${customer.debt.toLocaleString()}` : 'Cleared'}
                   </div>
-                  <p className="text-[10px] font-mono text-zinc-400 mt-0.5">
-                    {tx.type === 'OUT' ? '-' : '+'}{tx.quantity} UNITS | BAL: {tx.currentStock}
-                  </p>
                 </div>
               </div>
             ))}
-            {recentTransactions.length === 0 && (
-              <div className="py-20 text-center text-[10px] font-mono text-zinc-300 uppercase tracking-widest">
-                No telemetry recorded
-              </div>
-            )}
           </div>
-          <button className="w-full mt-6 py-3 text-[10px] font-bold text-zinc-400 hover:text-slate-950 transition-colors uppercase tracking-widest border border-zinc-100 rounded-sm">
-            Access Full Archive
+          <button className="w-full py-3 text-sm font-bold text-slate-900 border-t border-slate-100 mt-4 hover:bg-slate-50 transition-colors">
+            View All Wholesalers
           </button>
         </div>
       </div>
 
-      {/* Critical Alerts Strip */}
-      {outOfStockProducts.length > 0 && (
-        <div className="bg-red-950 text-white p-4 flex items-center justify-between rounded-sm overflow-hidden relative">
-          <div className="flex items-center gap-4 z-10">
-             <AlertCircle size={20} className="text-red-500 animate-pulse" />
-             <div>
-                <p className="text-[10px] font-black uppercase tracking-widest mb-0.5">Critical Inventory Depletion Detected</p>
-                <p className="text-[11px] opacity-70 font-mono tracking-tight">System identified {outOfStockProducts.length} null-level SKUs requiring immediate restock protocol.</p>
-             </div>
-          </div>
-          <button className="bg-white/10 hover:bg-white/20 transition-all px-4 py-2 text-[10px] font-bold uppercase tracking-widest z-10 border border-white/20">
-             Execute Procurement
-          </button>
-          <div className="absolute top-0 right-0 h-full w-32 bg-gradient-to-l from-red-500/20 to-transparent" />
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+          <h2 className="text-lg font-bold text-slate-900">Recent Inventory Actions</h2>
+          <button className="text-sm font-bold text-slate-900 hover:underline">View History</button>
         </div>
-      )}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="bg-slate-50 text-slate-500 text-[10px] uppercase tracking-wider font-bold">
+                <th className="px-6 py-4">Item</th>
+                <th className="px-6 py-4">Action</th>
+                <th className="px-6 py-4">Quantity</th>
+                <th className="px-6 py-4">User</th>
+                <th className="px-6 py-4 text-right">Time</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {[
+                { item: 'Steel Rods 12mm', action: 'Purchase', qty: '+500', user: 'Zaid (Admin)', time: '10 mins ago' },
+                { item: 'Cement Bags (OPC)', action: 'Sale', qty: '-120', user: 'Ahmed (Staff)', time: '45 mins ago' },
+                { item: 'Paint Buckets 20L', action: 'Adjustment', qty: '-2', user: 'Zaid (Admin)', time: '2 hours ago' },
+              ].map((row, i) => (
+                <tr key={i} className="hover:bg-slate-50 transition-colors group">
+                  <td className="px-6 py-4 font-bold text-slate-900">{row.item}</td>
+                  <td className="px-6 py-4 text-sm">
+                    <span className={cn(
+                      "px-2.5 py-1 rounded-full text-[10px] font-black uppercase",
+                      row.action === 'Purchase' ? 'bg-emerald-100 text-emerald-700' : 
+                      row.action === 'Sale' ? 'bg-slate-900 text-white' : 'bg-amber-100 text-amber-700'
+                    )}>
+                      {row.action}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 font-mono text-sm">{row.qty}</td>
+                  <td className="px-6 py-4 text-slate-600 text-sm">{row.user}</td>
+                  <td className="px-6 py-4 text-slate-400 text-sm text-right">{row.time}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 };
-
-import { Terminal } from 'lucide-react';

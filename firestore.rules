@@ -1,90 +1,81 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // ---------------------------------------------------------
-    // HELPERS
-    // ---------------------------------------------------------
-
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
-    }
-
-    function getUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-    }
-
-    function hasRole(role) {
-      return isSignedIn() && getUserData().role == role;
-    }
-
-    function isAdmin() {
-      return hasRole('ADMIN');
-    }
-
-    function isStaff() {
-      return hasRole('STAFF') || isAdmin();
-    }
-
-    function isViewer() {
-      return isSignedIn(); // Everyone authenticated can view
-    }
-
-    // Validation Blueprints
-    function isValidProduct(data) {
-      return data.keys().hasAll(['name', 'sku', 'quantity', 'price']) &&
-             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
-             data.sku is string && data.sku.size() > 0 && data.sku.size() <= 50 &&
-             data.quantity is number &&
-             data.price is number && data.price >= 0;
-    }
-
-    function isValidTransaction(data) {
-      return data.keys().hasAll(['productId', 'type', 'quantity', 'userId', 'timestamp']) &&
-             data.productId is string &&
-             data.type in ['IN', 'OUT', 'ADJUST'] &&
-             data.quantity is number &&
-             data.userId == request.auth.uid &&
-             data.timestamp == request.time;
-    }
-
-    // Default Deny
+    // Default deny
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // USERS
+    // Helper functions
+    function isSignedIn() { return request.auth != null; }
+    function isEmailVerified() { return request.auth.token.email_verified == true; }
+    function getRole() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role; }
+    function isAdmin() { return isSignedIn() && getRole() == 'ADMIN'; }
+    function isManager() { return isSignedIn() && (getRole() == 'ADMIN' || getRole() == 'MANAGER'); }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    // User Rules
     match /users/{userId} {
-      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
-      allow list: if isAdmin();
-      allow create: if isSignedIn() && request.auth.uid == userId && 
-                    request.resource.data.role == 'VIEWER'; // Default role is viewer for self-reg
-      allow update: if isAdmin(); // Only admins can promote roles
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || (isSignedIn() && request.auth.uid == userId);
     }
 
-    // PRODUCTS
+    // Settings Rules
+    match /settings/config {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Products Rules
     match /products/{productId} {
-      allow read: if isViewer();
-      allow create: if isStaff() && isValidProduct(request.resource.data);
-      allow update: if isStaff() && isValidProduct(request.resource.data);
+      allow read: if isSignedIn();
+      allow create: if isManager();
+      allow update: if isManager();
       allow delete: if isAdmin();
     }
 
-    // TRANSACTIONS
-    match /transactions/{transactionId} {
-      allow read: if isViewer();
-      allow create: if isStaff() && isValidTransaction(request.resource.data);
-      allow update, delete: if false; // Transactions are immutable audit logs
+    // Suppliers Rules
+    match /suppliers/{supplierId} {
+      allow read: if isSignedIn();
+      allow write: if isManager();
     }
 
-    // CATEGORIES
+    // Purchases Rules
+    match /purchases/{purchaseId} {
+      allow read: if isSignedIn();
+      allow write: if isManager();
+    }
+
+    // Wholesalers Rules
+    match /wholesalers/{wholesalerId} {
+      allow read: if isSignedIn();
+      allow write: if isManager();
+    }
+
+    // Sales Rules
+    match /sales/{saleId} {
+      allow read: if isSignedIn();
+      allow write: if isManager();
+    }
+
+    // Employees Rules
+    match /employees/{employeeId} {
+      allow read: if isManager();
+      allow write: if isAdmin();
+    }
+
+    // Assets Rules
+    match /assets/{assetId} {
+      allow read: if isSignedIn();
+      allow write: if isManager();
+    }
+
+    // Categories Rules
     match /categories/{categoryId} {
-      allow read: if isViewer();
-      allow write: if isStaff();
+      allow read: if isSignedIn();
+      allow write: if isManager();
     }
   }
 }

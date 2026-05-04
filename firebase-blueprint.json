@@ -7,7 +7,7 @@
       "properties": {
         "id": { "type": "string" },
         "email": { "type": "string", "format": "email" },
-        "role": { "type": "string", "enum": ["ADMIN", "STAFF", "VIEWER"] },
+        "role": { "type": "string", "enum": ["ADMIN", "MANAGER", "STAFF"] },
         "name": { "type": "string" },
         "photoURL": { "type": "string", "format": "uri" },
         "createdAt": { "type": "string", "format": "date-time" }
@@ -25,30 +25,110 @@
         "categoryId": { "type": "string" },
         "quantity": { "type": "number" },
         "minStock": { "type": "number" },
-        "price": { "type": "number" },
+        "sellingPrice": { "type": "number" },
+        "averageCost": { "type": "number" },
         "unit": { "type": "string" },
         "description": { "type": "string" },
-        "updatedAt": { "type": "string", "format": "date-time" },
-        "updatedBy": { "type": "string" }
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["name", "sku", "quantity"]
     },
-    "Transaction": {
-      "title": "Transaction",
-      "description": "Stock movement record",
+    "Supplier": {
+      "title": "Supplier",
+      "description": "Product supplier contact details",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "contactPerson": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "address": { "type": "string" },
+        "notes": { "type": "string" }
+      },
+      "required": ["name"]
+    },
+    "Purchase": {
+      "title": "Purchase",
+      "description": "Inventory purchase record",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
         "productId": { "type": "string" },
-        "type": { "type": "string", "enum": ["IN", "OUT", "ADJUST"] },
+        "supplierId": { "type": "string" },
+        "batchNumber": { "type": "string" },
         "quantity": { "type": "number" },
-        "previousStock": { "type": "number" },
-        "currentStock": { "type": "number" },
-        "userId": { "type": "string" },
-        "timestamp": { "type": "string", "format": "date-time" },
-        "note": { "type": "string" }
+        "unitPrice": { "type": "number" },
+        "totalPrice": { "type": "number" },
+        "purchaseDate": { "type": "string", "format": "date-time" },
+        "expiryDate": { "type": "string", "format": "date-time" }
       },
-      "required": ["productId", "type", "quantity", "userId", "timestamp"]
+      "required": ["productId", "supplierId", "quantity", "unitPrice", "purchaseDate"]
+    },
+    "Wholesaler": {
+      "title": "Wholesaler",
+      "description": "Bulk customer details",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "address": { "type": "string" },
+        "totalDebt": { "type": "number" }
+      },
+      "required": ["name"]
+    },
+    "Sale": {
+      "title": "Sale",
+      "description": "Sales record to wholesalers",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "wholesalerId": { "type": "string" },
+        "productId": { "type": "string" },
+        "quantity": { "type": "number" },
+        "unitPrice": { "type": "number" },
+        "totalPrice": { "type": "number" },
+        "profit": { "type": "number" },
+        "paymentType": { "type": "string", "enum": ["CASH", "CREDIT"] },
+        "paidAmount": { "type": "number" },
+        "remainingAmount": { "type": "number" },
+        "dueDate": { "type": "string", "format": "date-time" },
+        "saleDate": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["PAID", "PARTIAL", "OVERDUE"] }
+      },
+      "required": ["wholesalerId", "productId", "quantity", "unitPrice", "totalPrice", "saleDate"]
+    },
+    "Employee": {
+      "title": "Employee",
+      "description": "Staff member information",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "designation": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "salary": { "type": "number" },
+        "joiningDate": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "designation"]
+    },
+    "Asset": {
+      "title": "Asset",
+      "description": "Future machine/business equipment planning",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "estimatedCost": { "type": "number" },
+        "savedAmount": { "type": "number" },
+        "targetDate": { "type": "string", "format": "date-time" },
+        "priority": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH"] },
+        "status": { "type": "string", "enum": ["PLANNING", "SAVING", "ACQUIRED"] }
+      },
+      "required": ["name", "estimatedCost"]
     },
     "Category": {
       "title": "Category",
@@ -56,28 +136,62 @@
       "type": "object",
       "properties": {
         "id": { "type": "string" },
-        "name": { "type": "string" },
-        "description": { "type": "string" }
+        "name": { "type": "string" }
       },
       "required": ["name"]
+    },
+    "Settings": {
+      "title": "Settings",
+      "description": "Global application configuration",
+      "type": "object",
+      "properties": {
+        "businessName": { "type": "string" },
+        "logoURL": { "type": "string" },
+        "currency": { "type": "string" },
+        "lowStockThreshold": { "type": "number" }
+      }
     }
   },
   "firestore": {
     "/users/{userId}": {
       "schema": "User",
-      "description": "User profiles"
+      "description": "User profiles and roles"
     },
     "/products/{productId}": {
       "schema": "Product",
-      "description": "Inventory items"
+      "description": "Inventory products"
     },
-    "/transactions/{transactionId}": {
-      "schema": "Transaction",
-      "description": "Audit log of stock changes"
+    "/suppliers/{supplierId}": {
+      "schema": "Supplier",
+      "description": "Supplier contacts"
+    },
+    "/purchases/{purchaseId}": {
+      "schema": "Purchase",
+      "description": "Purchase history"
+    },
+    "/wholesalers/{wholesalerId}": {
+      "schema": "Wholesaler",
+      "description": "Wholesaler customers"
+    },
+    "/sales/{saleId}": {
+      "schema": "Sale",
+      "description": "Sales records"
+    },
+    "/employees/{employeeId}": {
+      "schema": "Employee",
+      "description": "Staff records"
+    },
+    "/assets/{assetId}": {
+      "schema": "Asset",
+      "description": "Future asset planning"
     },
     "/categories/{categoryId}": {
       "schema": "Category",
       "description": "Product categories"
+    },
+    "/settings/config": {
+      "schema": "Settings",
+      "description": "Global settings"
     }
   }
 }
