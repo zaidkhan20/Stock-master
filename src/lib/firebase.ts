@@ -3,10 +3,17 @@ import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { initializeFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import config from '../../firebase-applet-config.json';
 
-// Check if the config is actually a placeholder or real
-const isPlaceholder = config.apiKey === 'PLACEHOLDER';
+let configData: any = { apiKey: 'PLACEHOLDER' };
+try {
+  configData = config;
+} catch (e) {
+  console.error("Failed to load Firebase config:", e);
+}
 
-export const app = !isPlaceholder ? initializeApp(config) : null;
+// Check if the config is actually a placeholder or real
+const isPlaceholder = !configData || configData.apiKey === 'PLACEHOLDER';
+
+export const app = !isPlaceholder ? initializeApp(configData) : null;
 export const auth = app ? getAuth(app) : null;
 
 // Initialize Firestore with settings to help in restricted environments
