@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { 
   BarChart3, 
@@ -13,7 +13,8 @@ import {
   Menu,
   X
 } from 'lucide-react';
-import { auth } from '../lib/firebase';
+import { auth, db } from '../lib/firebase';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -43,36 +44,54 @@ const NavLink = ({ to, icon: Icon, children, collapsed }: { to: string, icon: an
 };
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [collapsed, setCollapsed] = React.useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [config, setConfig] = useState<any>({});
   const { profile, isAdmin } = useAuth();
   const location = useLocation();
 
+  useEffect(() => {
+    if (!db) return;
+    return onSnapshot(doc(db, 'settings', 'config'), (doc) => {
+      if (doc.exists()) {
+        setConfig(doc.data());
+      }
+    });
+  }, []);
+
   return (
-    <div className="min-h-screen bg-slate-50 flex">
+    <div className={cn(
+      "min-h-screen flex transition-colors duration-300",
+      config.darkMode ? "bg-slate-950 text-slate-100" : "bg-slate-50 text-slate-900"
+    )}>
       {/* Desktop Sidebar */}
       <aside 
         className={cn(
-          "hidden md:flex flex-col border-r border-slate-200 bg-white transition-all duration-300",
-          collapsed ? "w-20" : "w-64"
+          "hidden md:flex flex-col border-r transition-all duration-300 h-full",
+          collapsed ? "w-20" : "w-64",
+          config.darkMode ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"
         )}
       >
         <div className="p-4 flex items-center justify-between">
           {!collapsed && (
-            <div className="flex items-center gap-2 font-bold text-xl text-slate-900">
-              <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-white text-xs">SM</div>
-              <span>Stock Master</span>
+            <div className="flex items-center gap-2 font-bold text-xl">
+              {config.logoURL ? (
+                <img src={config.logoURL} alt="Logo" className="w-8 h-8 object-contain rounded-lg" />
+              ) : (
+                <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-white text-xs">SM</div>
+              )}
+              <span className={config.darkMode ? "text-white" : "text-slate-900"}>{config.businessName || 'Stock Master'}</span>
             </div>
           )}
           <button 
             onClick={() => setCollapsed(!collapsed)}
-            className="p-1 hover:bg-slate-100 rounded-md"
+            className={cn("p-1 rounded-md", config.darkMode ? "hover:bg-slate-800" : "hover:bg-slate-100")}
           >
             <Menu className="w-5 h-5 text-slate-500" />
           </button>
         </div>
 
-        <nav className="flex-1 px-3 py-4 space-y-1">
+        <nav className={cn("flex-1 px-3 py-4 space-y-1", config.compactView && "space-y-0.5 py-2")}>
           <NavLink to="/" icon={BarChart3} collapsed={collapsed}>Dashboard</NavLink>
           <NavLink to="/inventory" icon={Package} collapsed={collapsed}>Inventory</NavLink>
           <NavLink to="/purchases" icon={ShoppingCart} collapsed={collapsed}>Purchases</NavLink>
@@ -87,7 +106,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           )}
         </nav>
 
-        <div className="p-3 border-t border-slate-200">
+        <div className={cn("p-3 border-t", config.darkMode ? "border-slate-800" : "border-slate-200")}>
           <NavLink to="/settings" icon={Settings} collapsed={collapsed}>Settings</NavLink>
           <button
             onClick={() => auth.signOut()}

@@ -23,6 +23,7 @@ export interface Category {
 
 export enum UserRole {
   ADMIN = 'ADMIN',
+  MANAGER = 'MANAGER',
   STAFF = 'STAFF',
   VIEWER = 'VIEWER'
 }

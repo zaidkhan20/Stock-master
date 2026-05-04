@@ -25,7 +25,9 @@ export const Settings: React.FC = () => {
     businessName: 'Stock Master Pro',
     currency: 'PKR',
     logoURL: '',
-    lowStockThreshold: 10
+    lowStockThreshold: 10,
+    darkMode: false,
+    compactView: false
   });
 
   const [users, setUsers] = useState<any[]>([]);
@@ -47,10 +49,36 @@ export const Settings: React.FC = () => {
   const handleSaveGeneral = async () => {
     try {
       await setDoc(doc(db, 'settings', 'config'), config, { merge: true });
-      alert('Settings saved successfully!');
     } catch (err) {
       console.error(err);
     }
+  };
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 500000) { // 500KB limit for Base64 in Firestore
+      alert("Image too large. Please select a logo under 500KB.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64String = reader.result as string;
+      setConfig(prev => ({ ...prev, logoURL: base64String }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const toggleSetting = async (key: 'darkMode' | 'compactView') => {
+    const newVal = !config[key];
+    setConfig(prev => {
+      const updated = { ...prev, [key]: newVal };
+      // Save immediately for better UX
+      setDoc(doc(db, 'settings', 'config'), { [key]: newVal }, { merge: true });
+      return updated;
+    });
   };
 
   const handleUpdateRole = async (userId: string, newRole: string) => {
@@ -104,18 +132,33 @@ export const Settings: React.FC = () => {
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Branding Logo URL</label>
+                <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Branding Logo</label>
                 <div className="flex gap-4">
-                   <div className="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center overflow-hidden border border-slate-200">
-                      {config.logoURL ? <img src={config.logoURL} alt="Logo" className="w-full h-full object-contain" /> : <ImageIcon className="w-6 h-6 text-slate-400" />}
+                   <div className="w-20 h-20 bg-slate-100 rounded-2xl flex items-center justify-center overflow-hidden border border-slate-200">
+                      {config.logoURL ? <img src={config.logoURL} alt="Logo" className="w-full h-full object-contain" /> : <ImageIcon className="w-8 h-8 text-slate-400" />}
                    </div>
-                   <input 
-                    type="text" 
-                    placeholder="https://..."
-                    value={config.logoURL}
-                    onChange={(e) => setConfig({...config, logoURL: e.target.value})}
-                    className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-slate-900 transition-all"
-                  />
+                   <div className="flex-1 space-y-2">
+                     <input 
+                       type="file" 
+                       id="logoUpload"
+                       accept="image/*"
+                       onChange={handleLogoUpload}
+                       className="hidden"
+                     />
+                     <label 
+                       htmlFor="logoUpload"
+                       className="block w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-600 cursor-pointer hover:bg-slate-100 transition-all text-center"
+                     >
+                       Select from Device
+                     </label>
+                     <input 
+                      type="text" 
+                      placeholder="Or paste URL https://..."
+                      value={config.logoURL}
+                      onChange={(e) => setConfig({...config, logoURL: e.target.value})}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-slate-900 transition-all text-xs"
+                    />
+                   </div>
                 </div>
               </div>
 
@@ -176,16 +219,22 @@ export const Settings: React.FC = () => {
                  </div>
                  <p className="text-slate-500 text-sm mb-6">Tailor your interface experience for maximum productivity.</p>
                  <div className="flex flex-col gap-3">
-                    <button className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-colors">
+                    <button 
+                      onClick={() => toggleSetting('darkMode')}
+                      className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-colors"
+                    >
                        <span className="font-bold text-slate-700">Dark Mode</span>
-                       <div className="w-10 h-5 bg-slate-200 rounded-full relative">
-                          <div className="absolute left-1 top-1 w-3 h-3 bg-white rounded-full shadow-sm" />
+                       <div className={cn("w-10 h-5 rounded-full relative transition-colors", config.darkMode ? "bg-slate-900" : "bg-slate-200")}>
+                          <div className={cn("absolute top-1 w-3 h-3 bg-white rounded-full shadow-sm transition-all", config.darkMode ? "left-6" : "left-1")} />
                        </div>
                     </button>
-                    <button className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-colors">
+                    <button 
+                      onClick={() => toggleSetting('compactView')}
+                      className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-colors"
+                    >
                        <span className="font-bold text-slate-700">Compact View</span>
-                       <div className="w-10 h-5 bg-slate-200 rounded-full relative">
-                          <div className="absolute left-1 top-1 w-3 h-3 bg-white rounded-full shadow-sm" />
+                       <div className={cn("w-10 h-5 rounded-full relative transition-colors", config.compactView ? "bg-slate-900" : "bg-slate-200")}>
+                          <div className={cn("absolute top-1 w-3 h-3 bg-white rounded-full shadow-sm transition-all", config.compactView ? "left-6" : "left-1")} />
                        </div>
                     </button>
                  </div>

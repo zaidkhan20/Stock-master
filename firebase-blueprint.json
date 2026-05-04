@@ -148,7 +148,9 @@
         "businessName": { "type": "string" },
         "logoURL": { "type": "string" },
         "currency": { "type": "string" },
-        "lowStockThreshold": { "type": "number" }
+        "lowStockThreshold": { "type": "number" },
+        "darkMode": { "type": "boolean" },
+        "compactView": { "type": "boolean" }
       }
     }
   },
