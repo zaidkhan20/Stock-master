@@ -10,9 +10,17 @@ export const app = !isPlaceholder ? initializeApp(config) : null;
 export const auth = app ? getAuth(app) : null;
 
 // Initialize Firestore with settings to help in restricted environments
-export const db = app ? initializeFirestore(app, {
-  experimentalForceLongPolling: true,
-}) : null;
+let dbInstance = null;
+try {
+  if (app) {
+    dbInstance = initializeFirestore(app, {
+      experimentalForceLongPolling: true,
+    });
+  }
+} catch (e) {
+  console.error("Firestore initialization failed:", e);
+}
+export const db = dbInstance;
 
 export const googleProvider = new GoogleAuthProvider();
 
