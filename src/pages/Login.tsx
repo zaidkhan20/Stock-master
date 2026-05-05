@@ -8,7 +8,7 @@ import {
 } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
-import { Layout, Mail, Lock, User, ArrowRight, Loader2 } from 'lucide-react';
+import { LayoutDashboard, Mail, Lock, User, ArrowRight, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -75,7 +75,7 @@ export const Login: React.FC = () => {
       >
         <div className="flex flex-col items-center text-center mb-8">
           <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mb-4 transform -rotate-6 shadow-xl">
-            <Layout className="w-8 h-8 text-slate-900" />
+            <LayoutDashboard className="w-8 h-8 text-slate-900" />
           </div>
           <h1 className="text-3xl font-bold text-white tracking-tight">Stock Master</h1>
           <p className="text-slate-400 mt-2">Enterprise Inventory & Business Control</p>

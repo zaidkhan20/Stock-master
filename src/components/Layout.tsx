@@ -56,6 +56,8 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       if (doc.exists()) {
         setConfig(doc.data());
       }
+    }, (err) => {
+      console.error("Settings listener failed:", err);
     });
   }, []);
 
